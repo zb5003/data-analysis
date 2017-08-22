@@ -77,7 +77,7 @@ class levenberg_marquardt:
 
         self.lam = 0.001
 
-        self.beta = - sum(self.func_eval(self.a_model_obj.model_grad_num, self.current_parameters)) / 2
+        self.beta = - sum(self.func_eval_1(self.a_model_obj.model_grad_num, self.current_parameters)) / 2
         self.alpha = - sum(self.func_eval(self.a_model_obj.model_hessian_num, self.current_parameters)) / 2
         self.alpha_prime = self.alpha + self.lam * sp.diag(sp.diag(self.alpha))
 
@@ -90,7 +90,21 @@ class levenberg_marquardt:
         """
         evaluated = []
         for i in self.the_data:
-            evaluated.append(func([[param], [i]]))
+            evaluated.append(func([[param], [i]]) / self.sigs[sp.where(self.the_data == i)]**2)
+
+        return sp.asarray(evaluated)
+
+    def func_eval_1(self, func, param):
+        """
+        Evaluate a function for every measured data point.
+        :param func: The function to be evaluated.
+        :param param: The parameters to evaluate the function with.
+        :return: An array containing the function evaluated for each measured value.
+        """
+        evaluated = []
+        for i in self.the_data:
+            to_add = func([[param], [i]]) * (i - self.theory[sp.where(self.the_data) == i]) / self.sigs[sp.where(self.the_data == i)]**2
+            evaluated.append(to_add)
 
         return sp.asarray(evaluated)
 
@@ -150,7 +164,8 @@ class levenberg_marquardt:
             # print(cs_new)
             d_cs = cs_new - self.cs
             print(d_cs)
-
+            # print(checks)
+            # print(self.cs)
             self.lev_mar_update(cs_new, param_new, d_cs, checks)
 
         while not [sp.asarray(checks[-self.occurences:]) < self.cs_error]:
