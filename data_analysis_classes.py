@@ -36,7 +36,7 @@ class model_construct:
         :return: Numerical evaluation of the model gradient.
         """
         func = lambdify([self.parameters, self.indep_var], self.model_grad)
-        return func(*args)
+        return sp.asarray(func(*args))
 
     def model_hessian_num(self, args):
         """
@@ -51,7 +51,7 @@ class model_construct:
 
 class levenberg_marquardt:
 
-    def __init__(self, a_model_obj, parameter_guess, the_data, sigs):
+    def __init__(self, a_model_obj, parameter_guess, the_data, indep, sigs):
         """
         Initialize object for optimizing the parameters of a model via the Levenberg-Marquardt method.
         :param a_model_obj: An instance of model_construct representing the model to be fit.
@@ -62,23 +62,26 @@ class levenberg_marquardt:
         self.a_model_obj = a_model_obj
         self.parameter_guess = parameter_guess
         self.the_data = the_data
+        self.indep = indep
         self.sigs = sigs
 
         self.current_parameters = parameter_guess
 
-        self.theory = self.func_eval(self.a_model_obj.model_num, self.current_parameters)
+        self.theory = sp.asarray([self.a_model_obj.model_num([[self.current_parameters], [i]]) for i in self.indep])
         self.cs = ass.chi_squared(self.the_data, self.theory, self.sigs)
 
         self.n = len(the_data)
         self.cs_error = 0.001 * self.n
         self.occurences = 5
-        self.max_it = 1000
+        self.max_it = 50
         self.current_it = [0]
 
         self.lam = 0.001
 
-        self.beta = - sum(self.func_eval_1(self.a_model_obj.model_grad_num, self.current_parameters)) / 2
-        self.alpha = - sum(self.func_eval(self.a_model_obj.model_hessian_num, self.current_parameters)) / 2
+        self.beta = -sum([self.a_model_obj.model_grad_num([[self.current_parameters], [h]]) * (i - j) / k**2 for
+                         h, i, j, k in zip(self.indep, self.the_data, self.theory, self.sigs)]) / 2
+        self.alpha = -sum([self.a_model_obj.model_hessian_num([[self.current_parameters], [i]]) / j**2 for i, j in
+                           zip(self.indep, self.sigs)]) / 2
         self.alpha_prime = self.alpha + self.lam * sp.diag(sp.diag(self.alpha))
 
     def func_eval(self, func, param):
@@ -88,38 +91,26 @@ class levenberg_marquardt:
         :param param: The parameters to evaluate the function with.
         :return: An array containing the function evaluated for each measured value.
         """
-        evaluated = []
-        for i in self.the_data:
-            evaluated.append(func([[param], [i]]) / self.sigs[sp.where(self.the_data == i)]**2)
+        evaluated = sp.zeros(len(self.indep))
+        for i, j in zip(self.indep, evaluated):
+            j = func([[param], [i]])
 
-        return sp.asarray(evaluated)
+        return evaluated
 
-    def func_eval_1(self, func, param):
-        """
-        Evaluate a function for every measured data point.
-        :param func: The function to be evaluated.
-        :param param: The parameters to evaluate the function with.
-        :return: An array containing the function evaluated for each measured value.
-        """
-        evaluated = []
-        for i in self.the_data:
-            to_add = func([[param], [i]]) * (i - self.theory[sp.where(self.the_data) == i]) / self.sigs[sp.where(self.the_data == i)]**2
-            evaluated.append(to_add)
-
-        return sp.asarray(evaluated)
-
-    def lev_mar_update(self, test_cs, test_param, d_chi, d_chi_checks):
+    def lev_mar_update(self, test_cs, test_param, d_chi, d_chi_checks, theory):
         """
         Update self.theory (and all the attributes that depend on it) according to the Levenberg-Marquardt method.
         :param test_cs: The test update for self.cs.
         :param test_param: The test parameters.
         :return: None.
         """
-        if test_cs < self.cs:
+        if test_cs <= self.cs:
             self.current_parameters = test_param
             self.lam = 0.1 * self.lam
-            d_chi_checks.append(d_chi)
-            print(d_chi)
+            self.cs = test_cs
+            self.theory = theory
+            d_chi_checks.append(abs(d_chi))
+            print("fuckit")
         else:
             self.lam = 10 * self.lam
 
@@ -130,13 +121,8 @@ class levenberg_marquardt:
         Update the current_parameter (not the attribute) via the Levenberg-Marquardt method.
         :return: The updated parameters.
         """
-        # print(self.alpha_prime)
-        # print(self.lam)
-        # print(self.cs)
-        # print(self.current_parameters)
         alpha_prime = self.alpha + self.lam * sp.diag(sp.diag(self.alpha))
         a = la.inv(alpha_prime).dot(self.beta)
-        # print(a)
         return self.current_parameters + a
 
     def check_stop(self):
@@ -156,28 +142,25 @@ class levenberg_marquardt:
         :return: None.
         """
         checks = []
-        print(self.cs)
         while len(checks) < self.occurences:
             param_new = self.lev_mar_step()
-            theory_new = self.func_eval(self.a_model_obj.model_num, param_new)
+            theory_new = sp.asarray([self.a_model_obj.model_num([[param_new], [i]]) for i in self.indep])
             cs_new = ass.chi_squared(self.the_data, theory_new, self.sigs)
-            # print(cs_new)
-            d_cs = cs_new - self.cs
-            print(d_cs)
-            # print(checks)
-            # print(self.cs)
-            self.lev_mar_update(cs_new, param_new, d_cs, checks)
 
-        while not [sp.asarray(checks[-self.occurences:]) < self.cs_error]:
+            print(self.current_parameters, param_new, self.cs, cs_new)
+
+            d_cs = cs_new - self.cs
+            self.lev_mar_update(cs_new, param_new, d_cs, checks,  theory_new)
+
+        while not all(sp.asarray(checks[-self.occurences:]) < self.cs_error):
             print('fuck')
             param_new = self.lev_mar_step()
-            theory_new = self.func_eval(self.a_model_obj.model_num, param_new)
+            theory_new = sp.asarray([self.a_model_obj.model_num([[param_new], [i]]) for i in self.indep])
             cs_new = ass.chi_squared(self.the_data, theory_new, self.sigs)
 
             d_cs = cs_new - self.cs
-            print(d_cs)
 
-            self.lev_mar_update(cs_new, param_new, d_cs, checks)
+            self.lev_mar_update(cs_new, param_new, d_cs, checks, theory_new)
             self.check_stop()
 
         return None

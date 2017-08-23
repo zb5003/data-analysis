@@ -29,7 +29,7 @@ def chi_squared(measured, theory, sigma):
     :param sigma: The measurement uncertainty for each measured value.
     :return: The chi squared value.
     """
-    chi = (measured - theory) / sigma
+    chi = (measured - theory)**2 / sigma
     return sum(chi * chi)
 
 def beta(measured, theory, sigma, model_gradient_component):
