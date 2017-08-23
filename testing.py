@@ -8,29 +8,30 @@ import sympy as sy
 x = sy.Symbol('x')
 m = sy.Symbol('m')
 b = sy.Symbol('b')
-f = m * x + b
+a = sy.Symbol('a')
+f = m * x**2 / ( a + x) + b
 
-model = model_construct(f, [m, b], [x])
+model = model_construct(f, [m, b, a], [x])
 
-# real_param = [5, 3]
-indep = sp.linspace(0, 10, 50)
-real = sp.asarray([5 * i + 3 for i in indep])
-meas = sp.asarray([rnd.normal((5 * i + 3), 0.01) for i in indep])
-sig = sp.full(50, 0.01)
+real_param = [5, 3, 0.03]
+guess = sp.asarray([4.5, 3.5, 1.99])
 
-guess = sp.asarray([4.5, 3.5])
+n = 100
+sig_a_ma = 0.1
+sig = sp.full(n, sig_a_ma)
+
+indep = sp.linspace(0, 1, n)
+real = sp.asarray([model.model_num([real_param, [i]]) for i in indep])
+meas = sp.asarray([rnd.normal(model.model_num([real_param, [i]]), sig_a_ma) for i in indep])
+
+
 fit = levenberg_marquardt(model, guess, meas, indep, sig)
-print(ass.chi_squared(meas, real, sig))
-print(fit.cs)
-print(fit.cs_error)
 fit.lev_mar_run()
-print(fit.lam)
 print(fit.current_parameters)
-# print(model.model, model.model_num([[4.998, 3.013], [0]]))
-theory2 = sp.asarray([fit.current_parameters[0] * i + fit.current_parameters[1] for i in indep])
 
-plt.plot(indep, real)
-plt.plot(indep, fit.theory)
-plt.plot(indep, theory2)
-# plt.errorbar(indep, meas, yerr=1)
+plt.plot(indep, real, label="real")
+plt.plot(indep, fit.theory, label="fit")
+# plt.plot(indep, theory2)
+plt.errorbar(indep, meas, yerr=sig_a_ma, label="measured")
+plt.legend()
 plt.show()

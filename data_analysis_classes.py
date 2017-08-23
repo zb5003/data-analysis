@@ -110,7 +110,6 @@ class levenberg_marquardt:
             self.cs = test_cs
             self.theory = theory
             d_chi_checks.append(abs(d_chi))
-            print("fuckit")
         else:
             self.lam = 10 * self.lam
 
@@ -147,13 +146,10 @@ class levenberg_marquardt:
             theory_new = sp.asarray([self.a_model_obj.model_num([[param_new], [i]]) for i in self.indep])
             cs_new = ass.chi_squared(self.the_data, theory_new, self.sigs)
 
-            print(self.current_parameters, param_new, self.cs, cs_new)
-
             d_cs = cs_new - self.cs
             self.lev_mar_update(cs_new, param_new, d_cs, checks,  theory_new)
 
         while not all(sp.asarray(checks[-self.occurences:]) < self.cs_error):
-            print('fuck')
             param_new = self.lev_mar_step()
             theory_new = sp.asarray([self.a_model_obj.model_num([[param_new], [i]]) for i in self.indep])
             cs_new = ass.chi_squared(self.the_data, theory_new, self.sigs)
