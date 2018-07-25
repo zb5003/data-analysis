@@ -1,6 +1,7 @@
 import scipy as sp
 from scipy import linalg as la
 import sympy as sy
+import random
 import sympy.utilities.lambdify as lambdify
 import Assorted_Statistics as ass
 
@@ -57,6 +58,7 @@ class levenberg_marquardt:
         :param a_model_obj: An instance of model_construct representing the model to be fit.
         :param parameter_guess: An array containing the initial guess for the parameters.
         :param the_data: An array containing the measured date.
+        :param indep: Float array. Contains the values of the independent variables.
         :param sigs: the measurement uncertainty for each measured value.
         """
         self.a_model_obj = a_model_obj
@@ -160,3 +162,115 @@ class levenberg_marquardt:
             self.check_stop()
 
         return None
+
+class monte_carlo:
+
+    def __init__(self, indep, y, sig, model_func, param_values):
+        """
+        :param indep: Float array. Contains numeric values of the independent variable.
+        :param y: Float array. Measured values (floats).
+        :param sig: Float array. Measurement uncertainties (floats).
+        :param model_func: model_construct object. Symbolic function to be fitted.
+        :param param_values: Initial guess for the values of the model parameters.
+        """
+        self.indep = indep
+        self.y = y
+        self.sig = sig  # measurement error
+        self.model_func = model_func
+        self.param_values = param_values  # values of model parameters (numbers)
+
+        self.param_len = len(model_func.parameters)
+        self.meas_len = len(y)
+
+    def generate_measurement_sets(self):
+        """
+        Generate a simulated set of measurements with their corresponding independent variables and measurement errors.
+        :return: List of ndarrays. The first array are the measurements, the second is the independent variables
+        (this array might have more than one row), and the third is an array of the measurement errors.
+        """
+        return NotImplementedError
+
+    def generate_simulated_parameters(self):
+        """
+        Run the Monte Carlo algorihtm.
+        :return: Float array. Each row is an individual fit and the columns are the resulting model parameter values.
+        """
+        return NotImplementedError
+
+    def parameter_average(self, sim):
+        """
+        Calculate the average value of each model parameter over the distribution of all Monte Carlo simulations.
+        :param sim: Ndarray.  Contains the model parameter values calculated for each Monte Carlo simulation.
+        :return: Ndarray. Contains the average values of the model parameters.
+        """
+        averages = sp.zeros(self.param_len)
+        for param in range(self.param_len):
+            averages[param] = ass.average(sim[:, param])
+        return averages
+
+    def parameter_stddev(self, sim):
+        """
+        Calculate the standard deviation for each model parameter over the distribution of all Monte Carlo simulations.
+        :param sim: Ndarray. Contains the model parameter values calculated for each Monte Carlo simulation.
+        :return: Ndarray. Contains the standard deviations of the model parameters.
+        """
+        stddev = sp.zeros(self.param_len)
+        for param in range(self.param_len):
+            stddev[param] = ass.stddev(sim[:, param])
+        return stddev
+
+    def run_monte_carlo(self):
+        """
+        Run the Monte Carlo algorithm and calculate statistics on the model parameters.
+        :return:
+        """
+        return NotImplementedError
+
+class bootstrap(monte_carlo):
+
+    def __init__(self, indep, y, sig, model_func, param_values, n_sample_sets=100):
+        monte_carlo.__init__(self, indep, y, sig, model_func, param_values)
+        self.n_sample_sets = n_sample_sets
+
+    def generate_measurement_sets(self):
+        """
+        Generate a simulated data set by replacement.
+        :return: 3 1-D ndarrays. Contains simulated measured values, simulated measurement
+                 uncertainties, and simulated independent variables.
+        """
+        n_replace = int(random.random() * self.meas_len / 4 - 1)  # number of measured values to replace/duplicate
+        sim_measured = self.y.copy()
+        sim_sig = self.sig.copy()
+        sim_indep = self.indep.copy()
+        for i in range(n_replace):
+            n = int((self.meas_len - 1) * random.random())
+            sim_measured[n] = self.y[n + 1]
+            sim_sig[n] = self.sig[n + 1]
+            sim_indep[n] = self.indep[n + 1]
+        return sim_measured, sim_sig, sim_indep
+
+    def generate_simulated_parameters(self):
+        """
+        Use the Levenberg-Marquardt method to fit a number of simulated data sets to a model.
+        :return: Ndarray containing the fitted parameters for a number of simulated data sets.
+        """
+        sim = sp.zeros((self.n_sample_sets, self.param_len))
+        for i in range(self.n_sample_sets):
+            measured, sig, indep = self.generate_measurement_sets()
+            single_sim = levenberg_marquardt(self.model_func, self.param_values, measured, indep, sig)
+            single_sim.lev_mar_run()
+            sim[i, :] = single_sim.current_parameters
+            print("Generated measurement set", i, "fits with parameters", sim[i, :])
+        return sim
+
+    def run_monte_carlo(self):
+        """
+        Run the Monte Carlo algorithm and calculate statistics on the model parameters.
+        :return: Tuple.  The first element is an ndarray containing the average parameters,
+                         the second is an ndarray containing the stddev on the parameters,
+                         and the third is an ndarray containing the parameter results for each simulation.
+        """
+        simulated_parameters = self.generate_simulated_parameters()
+        parameter_average_value = self.parameter_average(simulated_parameters)
+        parameter_stddev_value = self.parameter_stddev(simulated_parameters)
+        return parameter_average_value, parameter_stddev_value, simulated_parameters

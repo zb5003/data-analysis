@@ -1,4 +1,5 @@
 import scipy as sp
+import scipy.special as spsp
 
 def average(data):
     """
@@ -56,3 +57,16 @@ def alpha(sigma, model_gradient_component_i, model_gradient_component_j):
     :return: The (i, j) component of the Hessian.
     """
     return sum(model_gradient_component_i * model_gradient_component_j / (sigma * sigma)) / 2
+
+
+def Q(nu, chisq):
+    """
+    Calculate the probability that a normally distributed random numbers produce a chi squared value greater than
+    measured. The distribution is described by an incomplete gamma function and should only be used for models that
+    are linear or close to linear in their parameters.
+    [1] pg. 778-780.
+    :param nu: Number of degrees of freedom.
+    :param chisq: Measured chi squared value.
+    :return: The probability that random noise will produce a chi squared greater than the measured value.
+    """
+    return 1 - spsp.gammainc(nu / 2, chisq / 2)
