@@ -20,7 +20,7 @@ def stddev(data):
     counts = len(data)
     ave = average(data)
     total = sum(data * data)
-    return (total - ave**2) / counts
+    return sp.sqrt(total / counts - ave**2)
 
 def chi_squared(measured, theory, sigma):
     """
