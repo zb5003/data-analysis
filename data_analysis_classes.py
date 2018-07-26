@@ -3,6 +3,7 @@ from scipy import linalg as la
 import sympy as sy
 import random
 import sympy.utilities.lambdify as lambdify
+import matplotlib.pyplot as plt
 import Assorted_Statistics as ass
 
 class model_construct:
@@ -274,3 +275,28 @@ class bootstrap(monte_carlo):
         parameter_average_value = self.parameter_average(simulated_parameters)
         parameter_stddev_value = self.parameter_stddev(simulated_parameters)
         return parameter_average_value, parameter_stddev_value, simulated_parameters
+
+    def save_data(self, folder=''):
+        """
+
+        :param folder:
+        :return:
+        """
+        aves, stds, all_params = self.run_monte_carlo()
+        sp.savetxt(folder + "parameter_data.txt", all_params)
+        n = len(aves)
+        fig, ax = plt.subplots(nrows=n, ncols=1)
+        fig.subplots_adjust(hspace=0.3 * n)
+        fig.suptitle(r"Parameter Distributions for model $" + str(sy.latex(self.model_func.model)) + "$")
+        for i in range(n):
+            ax[i].hist(all_params[:, i])
+            ax[i].set_title("Distribution of Parameter " + str(self.model_func.parameters[i]))
+            ax[i].set_xlabel("Value of Parameter")
+            ax[i].set_ylabel("Bin Occupation")
+            ax[i].axvline(aves[i], linewidth='2', color='red')
+            ylim = ax[i].get_ylim()
+            ax[i].errorbar(aves[i], (ylim[1] - ylim[0]) / 2, xerr=stds[i], linestyle='none', elinewidth=2, ecolor='red', capthick=2)
+        plt.savefig(folder + 'parameters.png')
+        plt.close()
+
+        return aves, stds, all_params
